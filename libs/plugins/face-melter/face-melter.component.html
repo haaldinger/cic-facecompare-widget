@@ -1,0 +1,352 @@
+<div class="app-container">
+  <header class="hero">
+    <h1>Visual<span class="accent">Inspector</span></h1>
+    <p class="subtitle">Upload to CIC Repo &amp; Trigger Automate Process</p>
+  </header>
+
+  <section class="upload-area">
+    <div class="drop-zone" [class.drag-over]="isSourceDragOver" [class.has-image]="!!sourcePreview"
+         (dragover)="onDragOver($event, 'source')" (dragleave)="onDragLeave($event, 'source')" (drop)="onDrop($event, 'source')"
+         (click)="sourceInput.click()">
+      <input type="file" #sourceInput accept="image/*" multiple hidden (change)="onFileSelected($event, 'source')" />
+      <div class="drop-zone__preview" [style.backgroundImage]="sourcePreview ? 'url(' + sourcePreview + ')' : 'none'"></div>
+      <div class="drop-zone__prompt">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <span class="label">Source Image</span>
+        <span class="hint">Drag &amp; drop or click</span>
+      </div>
+    </div>
+
+    <div class="vs-badge">VS</div>
+
+    <div class="drop-zone" [class.drag-over]="isTargetDragOver" [class.has-image]="!!targetPreview"
+         (dragover)="onDragOver($event, 'target')" (dragleave)="onDragLeave($event, 'target')" (drop)="onDrop($event, 'target')"
+         (click)="targetInput.click()">
+      <input type="file" #targetInput accept="image/*" multiple hidden (change)="onFileSelected($event, 'target')" />
+      <div class="drop-zone__preview" [style.backgroundImage]="targetPreview ? 'url(' + targetPreview + ')' : 'none'"></div>
+      <div class="drop-zone__prompt">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <span class="label">Target Image</span>
+        <span class="hint">Drag &amp; drop or click</span>
+      </div>
+    </div>
+  </section>
+
+  <button class="btn-compare" [class.loading]="isLoading" [disabled]="!sourceFile || !targetFile || isLoading" (click)="submitAndTriggerProcess()">
+    <span class="btn-compare__text">Upload & Trigger</span>
+    <span class="btn-compare__loader"></span>
+  </button>
+
+  <!-- ═══ RESULT SCORECARD (top position) ═══ -->
+  <section *ngIf="currentRekognitionResult" class="scorecard-panel" [@fadeSlide]>
+    <ng-container *ngIf="isSuccessfulResult && !isBatchResult">
+      <!-- Confetti canvas -->
+      <canvas #confettiCanvas class="confetti-canvas" *ngIf="hasMatch"></canvas>
+
+      <div class="scorecard-header" [class.is-match]="hasMatch" [class.no-match]="!hasMatch">
+        <div class="match-status">
+          <svg *ngIf="hasMatch" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <svg *ngIf="!hasMatch" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          <h2>{{ hasMatch ? 'IDENTITY VERIFIED' : 'MATCH FAILED' }}</h2>
+        </div>
+
+        <!-- Animated Similarity Ring -->
+        <div class="ring-container">
+          <svg class="ring-svg" viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="52" />
+            <circle class="ring-fill" cx="60" cy="60" r="52"
+              [style.strokeDasharray]="ringCircumference"
+              [style.strokeDashoffset]="ringOffset"
+              [class.animate-ring]="true" />
+          </svg>
+          <div class="ring-value">
+            <span class="ring-number">{{ getSimilarity() | number:'1.1-1' }}</span>
+            <span class="ring-percent">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Face Crop Zoom Comparison -->
+      <div class="face-crops" *ngIf="sourcePreview && targetPreview">
+        <div class="crop-card">
+          <div class="crop-image" [style.backgroundImage]="'url(' + sourcePreview + ')'"
+               [style.backgroundPosition]="getSourceCropPosition()"
+               [style.backgroundSize]="getSourceCropZoom()"></div>
+          <span class="crop-label">Source Face</span>
+        </div>
+        <div class="crop-vs">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+        <div class="crop-card">
+          <div class="crop-image" [style.backgroundImage]="'url(' + targetPreview + ')'"
+               [style.backgroundPosition]="getTargetCropPosition()"
+               [style.backgroundSize]="getTargetCropZoom()"></div>
+          <span class="crop-label">Matched Face</span>
+        </div>
+      </div>
+
+      <div class="scorecard-details">
+        <p class="summary-text" *ngIf="hasMatch">The system confirmed a facial match with high confidence.</p>
+        <p class="summary-text" *ngIf="!hasMatch">The faces do not meet the minimum similarity threshold for verification.</p>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><span class="label">Brightness</span><span class="value">{{ getMetric('Brightness') | number:'1.0-0' }}</span></div>
+        <div class="metric-card"><span class="label">Sharpness</span><span class="value">{{ getMetric('Sharpness') | number:'1.0-0' }}</span></div>
+        <div class="metric-card"><span class="label">Confidence</span><span class="value">{{ getMetric('Confidence') | number:'1.1-1' }}%</span></div>
+      </div>
+
+      <!-- Face Detection Overlays -->
+      <div class="face-overlay-panel" *ngIf="sourcePreview || targetPreview">
+        <h4 class="overlay-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          Face Detection
+        </h4>
+        <div class="overlay-images">
+          <!-- Source Image -->
+          <div class="overlay-container" *ngIf="sourcePreview">
+            <span class="overlay-label">Source</span>
+            <div class="overlay-wrap">
+              <img [src]="sourcePreview" class="overlay-img" />
+              <div class="bbox source-bbox" *ngIf="getSourceBoundingBox()" [ngStyle]="boxStyle(getSourceBoundingBox())">
+                <span class="bbox-tag">Source Face</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="overlay-vs">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </div>
+
+          <!-- Target Image -->
+          <div class="overlay-container" *ngIf="targetPreview">
+            <span class="overlay-label">Target</span>
+            <div class="overlay-wrap">
+              <img [src]="targetPreview" class="overlay-img" />
+              <ng-container *ngFor="let fb of getTargetBoundingBoxes()">
+                <div class="bbox" [class.matched]="fb.matched" [class.unmatched]="!fb.matched" [ngStyle]="boxStyle(fb.box)">
+                  <span class="bbox-tag" *ngIf="fb.matched">{{ fb.similarity | number:'1.1-1' }}%</span>
+                  <span class="bbox-tag" *ngIf="!fb.matched">No Match</span>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+    <ng-container *ngIf="isSuccessfulResult && isBatchResult">
+      <div class="scorecard-header is-match">
+        <div class="match-status">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h2>PROCESS RESULTS</h2>
+        </div>
+        <div class="similarity-score" style="font-size:1.5rem">{{ getBatchItems().length }} items</div>
+      </div>
+      <div class="batch-results">
+        <div class="batch-item" *ngFor="let item of getBatchItems(); let i = index">
+          <div class="batch-item-header">
+            <span class="batch-index">#{{ i + 1 }}</span>
+            <span class="batch-name" *ngIf="item.name || item.documentName || item.id">{{ item.name || item.documentName || item.id }}</span>
+          </div>
+          <div class="batch-item-fields">
+            <ng-container *ngFor="let key of objectKeys(item)">
+              <div class="batch-field" *ngIf="key !== '_type'">
+                <span class="field-key">{{ key }}</span>
+                <span class="field-value" *ngIf="isSimpleValue(item[key])">{{ item[key] }}</span>
+                <pre class="field-value-json" *ngIf="!isSimpleValue(item[key])">{{ item[key] | json }}</pre>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+    <ng-container *ngIf="!isSuccessfulResult">
+      <div class="scorecard-header no-match">
+        <div class="match-status">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <h2>ERROR ({{ currentRekognitionResult.statusCode }})</h2>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+
+  <!-- ═══ PROCESS DATA EXPLORER ═══ -->
+  <section *ngIf="debugVariables?.length" class="data-explorer" [@fadeSlide]>
+    <div class="explorer-header" (click)="dataExplorerOpen = !dataExplorerOpen">
+      <h3 class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        Process Data Explorer
+        <span class="var-count">{{ debugVariables.length }} variables</span>
+      </h3>
+      <svg class="chevron" [class.open]="dataExplorerOpen" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="explorer-body" *ngIf="dataExplorerOpen">
+      <div class="var-card" *ngFor="let v of debugVariables">
+        <div class="var-card-header">
+          <span class="var-card-name">{{ v.name }}</span>
+          <span class="var-card-type">{{ v.type || (isSimpleValue(v.value) ? typeof v.value : 'object') }}</span>
+        </div>
+        <div class="var-card-value">
+          <span *ngIf="isSimpleValue(v.value)">{{ v.value }}</span>
+          <pre *ngIf="!isSimpleValue(v.value)" class="json-viewer">{{ v.value | json }}</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PROCESS TRACKING PANEL ═══ -->
+  <section *ngIf="processInstanceId" class="tracker-panel" [@fadeSlide]>
+
+    <!-- Header row -->
+    <div class="tracker-header">
+      <h2>Process Tracking</h2>
+      <div class="status-badge" [ngClass]="'status-' + (processInstance?.status || 'RUNNING')">
+        <span class="status-dot"></span>
+        {{ processInstance?.status || 'RUNNING' }}
+      </div>
+    </div>
+
+    <p class="instance-id">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.5 2H8.6c-.4 0-.8.2-1.1.5-.3.3-.5.7-.5 1.1v16.8c0 .4.2.8.5 1.1.3.3.7.5 1.1.5h10.8c.4 0 .8-.2 1.1-.5.3-.3.5-.7.5-1.1V7.5L15.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+      {{ processInstanceId }}
+    </p>
+
+    <!-- ═══ BPMN PIPELINE VISUALIZATION ═══ -->
+    <div class="pipeline">
+      <div class="pipeline-step" *ngFor="let step of pipelineSteps; let i = index"
+           [class.completed]="step.state === 'completed'"
+           [class.active]="step.state === 'active'"
+           [class.pending]="step.state === 'pending'"
+           [class.error]="step.state === 'error'">
+        <div class="pipeline-node">
+          <!-- Completed check -->
+          <svg *ngIf="step.state === 'completed'" class="pipeline-icon check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <!-- Active spinner -->
+          <div *ngIf="step.state === 'active'" class="pipeline-spinner"></div>
+          <!-- Pending number -->
+          <span *ngIf="step.state === 'pending'" class="pipeline-number">{{ i + 1 }}</span>
+          <!-- Error X -->
+          <svg *ngIf="step.state === 'error'" class="pipeline-icon error-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </div>
+        <div class="pipeline-connector" *ngIf="i < pipelineSteps.length - 1"
+             [class.filled]="step.state === 'completed'"></div>
+        <div class="pipeline-label">
+          <span class="pipeline-label__name">{{ step.label }}</span>
+          <span class="pipeline-label__detail" *ngIf="step.detail">{{ step.detail }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LIVE ACTIVITY LOG ═══ -->
+    <div class="activity-section" *ngIf="activityLog.length > 0">
+      <h3 class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Activity
+      </h3>
+      <div class="activity-log">
+        <div class="activity-entry" *ngFor="let entry of activityLog" [class]="'activity-' + entry.type" [@fadeSlide]>
+          <span class="activity-time">{{ entry.time }}</span>
+          <span class="activity-msg">{{ entry.message }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ USER TASKS ═══ -->
+    <div class="task-section" *ngIf="tasks.length > 0">
+      <h3 class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        User Tasks
+      </h3>
+      <div class="task-card" *ngFor="let task of tasks" [@fadeSlide]>
+        <div class="task-card__info">
+          <span class="task-card__name">{{ task.name || 'Unnamed Task' }}</span>
+          <span class="task-card__meta">
+            <span class="task-status-chip" [ngClass]="'chip-' + (task.status || 'CREATED')">{{ task.status }}</span>
+            <span *ngIf="task.assignee" class="task-assignee">{{ task.assignee }}</span>
+          </span>
+        </div>
+        <a *ngIf="task.status === 'CREATED' || task.status === 'ASSIGNED'"
+           class="task-link"
+           [href]="getTaskLink(task)"
+           target="_blank"
+           (click)="$event.stopPropagation()">
+          Open Task
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══ WAITING FOR USER ACTION ═══ -->
+    <div class="waiting-bar" *ngIf="waitingForUser" [@fadeSlide]>
+      <div class="waiting-info">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Polling paused — awaiting user task completion</span>
+      </div>
+      <button class="btn-check-status" (click)="checkStatus()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l5.08 5.08"/></svg>
+        Check Status
+      </button>
+    </div>
+
+    <!-- ═══ ELAPSED TIME ═══ -->
+    <div class="elapsed-bar" *ngIf="processInstanceId">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>{{ elapsedTime }}</span>
+    </div>
+
+  </section>
+
+
+
+  <!-- ═══ RECENT COMPARISONS (HISTORY) ═══ -->
+  <section class="history-panel">
+    <div class="history-header">
+      <h2>Recent Comparisons</h2>
+      <button class="btn-refresh" (click)="ngOnInit()" [class.spinning]="isLoadingHistory">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l5.08 5.08"/></svg>
+      </button>
+    </div>
+
+    <div class="history-list">
+      <div class="history-card" *ngFor="let run of historicalInstances" [@fadeSlide]>
+        <div class="history-card__header">
+          <div class="run-info">
+            <span class="run-name">{{ run.name || 'Visual Inspector Comparison' }}</span>
+            <span class="run-date">{{ run.startDate | date:'medium' }}</span>
+          </div>
+          <div class="status-badge" [ngClass]="'status-' + run.status">
+            <span class="status-dot"></span>
+            {{ run.status }}
+          </div>
+        </div>
+
+        <div class="history-card__content">
+          <!-- Image Previews -->
+          <div class="run-images" *ngIf="run.images?.length > 0">
+            <div class="preview-box">
+              <div class="preview-img" [style.backgroundImage]="'url(' + run.images[0] + ')'"></div>
+              <span class="preview-label">Source</span>
+            </div>
+            <div class="preview-vs">VS</div>
+            <div class="preview-box">
+              <div class="preview-img" [style.backgroundImage]="run.images[1] ? 'url(' + run.images[1] + ')' : 'none'"></div>
+              <span class="preview-label">Target</span>
+            </div>
+          </div>
+
+          <!-- Rekognition Data -->
+          <div class="run-data" *ngIf="run.rekognitionData">
+            <h4 class="data-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              Rekognition Results
+            </h4>
+            <pre class="json-viewer">{{ run.rekognitionData | json }}</pre>
+          </div>
+          <div class="run-data empty" *ngIf="!run.rekognitionData">
+             <span class="empty-hint">No Rekognition Data Available</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>

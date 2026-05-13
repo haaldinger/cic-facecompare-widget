@@ -1,0 +1,175 @@
+{
+  "$schema": "../../../node_modules/@alfresco/adf-core/app.config.schema.json",
+  "providers": "ALL",
+  "ecmHost": "https://ha-sim.ha.hyland.com",
+  "bpmHost": "https://ha-sim.ha.hyland.com",
+  "authType": "OAUTH",
+  "serverTimeUrl": "https://ha-sim.ha.hyland.com/identity-adapter-service/v1/server/time",
+  "hxIdpHost": "",
+  "oauth2": {
+    "host": "https://ha-sim.ha.hyland.com",
+    "clientId": "alfresco",
+    "authPath": "/protocol/openid-connect/token/",
+    "scope": "openid",
+    "implicitFlow": false,
+    "codeFlow": true,
+    "silentLogin": true,
+    "publicUrls": [
+      "**/blank"
+    ],
+    "redirectSilentIframeUri": "http://localhost:4200/assets/silent-refresh.html",
+    "redirectUri": "/",
+    "redirectUriLogout": "/",
+    "clockSkewInSec": 120
+  },
+  "plugins": {
+    "contentService": true,
+    "processAutomation": true
+  },
+  "aws": {
+    "captcha": {
+      "integrationUrl": "",
+      "apiKey": ""
+    }
+  },
+  "alfresco-deployed-apps": [],
+  "uiType": "DEFAULT_UI",
+  "locale": "en",
+  "languages": [
+    {
+      "key": "en",
+      "label": "English"
+    },
+    {
+      "key": "fr",
+      "label": "Français"
+    },
+    {
+      "key": "de",
+      "label": "Deutsch"
+    },
+    {
+      "key": "it",
+      "label": "Italiano"
+    },
+    {
+      "key": "es",
+      "label": "Español"
+    },
+    {
+      "key": "pl",
+      "label": "Polish"
+    },
+    {
+      "key": "pt",
+      "label": "Português"
+    }
+  ],
+  "application": {
+    "name": "Workspace",
+    "version": "0.4.0",
+    "logo": "",
+    "headerImagePath": "",
+    "key": "hxps-runtime"
+  },
+  "landingPage": "",
+  "headerColor": "",
+  "headerTextColor": "",
+  "customCssPath": "",
+  "webFontPath": "",
+  "custom-modeled-extension": {},
+  "analytics": {
+    "pendo": {
+      "enabled": "false",
+      "key": "",
+      "disableGuides": "false",
+      "excludeAllText": "false"
+    }
+  },
+  "customer": {
+    "name": ""
+  },
+  "nucleusApiHost": "https://ha-sim.ha.hyland.com",
+  "adf-cloud-start-process": {
+    "name": "%{processDefinition} - %{datetime}",
+    "processDefinitionName": ""
+  },
+  "dateValues": {
+    "defaultDateFormat": "mediumDate",
+    "defaultTooltipDateFormat": "medium",
+    "defaultDateTimeFormat": "MMM d, y, h:mm",
+    "defaultLocale": "en"
+  },
+  "totalQuickStartProcessDefinitions": 5,
+  "adf-cloud-process-header": {
+    "defaultDateFormat": "medium",
+    "presets": {
+      "properties": [
+        "name",
+        "status",
+        "initiator",
+        "startDate",
+        "lastModified",
+        "businessKey"
+      ]
+    }
+  },
+  "adf-cloud-task-header": {
+    "defaultDateFormat": "medium"
+  },
+  "adf-cloud-process-filter-config": {
+    "filterProperties": [
+      "status",
+      "sort",
+      "order",
+      "processName",
+      "processDefinitionName",
+      "initiator",
+      "completedDateRange",
+      "startedDateRange",
+      "suspendedDateRange",
+      "appVersionMultiple"
+    ],
+    "sortProperties": [
+      "name",
+      "status",
+      "startDate",
+      "initiator",
+      "processDefinitionName"
+    ],
+    "actions": [
+      "save",
+      "saveAs",
+      "delete"
+    ]
+  },
+  "adf-edit-task-filter": {
+    "filterProperties": [
+      "processDefinitionName",
+      "taskName",
+      "status",
+      "sort",
+      "order",
+      "priority",
+      "dueDateRange",
+      "completedDateRange",
+      "createdDateRange",
+      "completedBy"
+    ],
+    "sortProperties": [
+      "id",
+      "name",
+      "createdDate",
+      "dueDate",
+      "status",
+      "priority",
+      "processDefinitionId",
+      "processDefinitionName"
+    ],
+    "actions": [
+      "save",
+      "saveAs",
+      "delete"
+    ]
+  }
+}
