@@ -1,6 +1,6 @@
 {
-  "name": "cic-face-melter",
-  "description": "CIC_FaceMelter Application",
+  "name": "cic-facecompare-widget",
+  "description": "CIC Face Compare Widget",
   "version": "0.4.0",
   "commit": "<build-generated-commit>",
   "author": "Alfresco Software, Ltd.",

@@ -1,18 +1,18 @@
 import { Component, OnDestroy, inject, ChangeDetectorRef, NgZone, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppConfigService, AuthenticationService } from '@alfresco/adf-core';
-import { StartProcessCloudService, ProcessCloudService, ProcessListCloudService } from '@alfresco/adf-process-services-cloud';
-import { ProcessQueryCloudRequestModel } from '@alfresco/adf-process-services-cloud';
+import { StartProcessCloudService, ProcessCloudService } from '@alfresco/adf-process-services-cloud';
 import { HxpUploadService } from '@hxp/workspace-hxp/shared/upload-files/feature-shell';
 import { interval, Subscription, firstValueFrom } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { FileModel } from '@hxp/shared-hxp/services';
 
 @Component({
-  selector: 'app-face-melter',
+  selector: 'app-face-compare',
   standalone: false,
-  templateUrl: './face-melter.component.html',
-  styleUrls: ['./face-melter.component.scss'],
+  templateUrl: './face-compare.component.html',
+  styleUrls: ['./face-compare.component.scss'],
   animations: [
     trigger('fadeSlide', [
       transition(':enter', [
@@ -22,7 +22,7 @@ import { FileModel } from '@hxp/shared-hxp/services';
     ])
   ]
 })
-export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
+export class FaceCompareComponent implements OnDestroy, AfterViewChecked {
   @ViewChild('confettiCanvas') confettiCanvas?: ElementRef<HTMLCanvasElement>;
   private confettiFired = false;
   // Upload & Current Run State
@@ -44,6 +44,8 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
   debugVariables: any = null;
   dataExplorerOpen = false;
   pollingAttempt: number = 0;
+  varSearchQuery: string = '';
+  expandedVars: { [key: string]: boolean } = {};
 
   // Ring animation
   readonly ringCircumference = 2 * Math.PI * 52; // r=52
@@ -51,6 +53,10 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
     const pct = this.getSimilarity() / 100;
     return this.ringCircumference * (1 - pct);
   }
+
+  isSuccessfulResult = false;
+  isBatchResult = false;
+  hasMatch = false;
 
   private pollingSub?: Subscription;
   private startTime: number = 0;
@@ -72,13 +78,14 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
   historicalInstances: any[] = [];
   isLoadingHistory = false;
   waitingForUser = false;
+  private blobUrls: string[] = [];
 
   // Injected HXP services
   private readonly appConfigService = inject(AppConfigService);
   private readonly authService = inject(AuthenticationService);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly startProcessCloudService = inject(StartProcessCloudService);
   private readonly processCloudService = inject(ProcessCloudService);
-  private readonly processListCloudService = inject(ProcessListCloudService);
   private readonly uploadService = inject(HxpUploadService);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -95,11 +102,31 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
   }
 
   ngOnInit() {
+    this.resetCurrentRun();
     this.loadHistory();
   }
 
+  resetCurrentRun() {
+    this.sourcePreview = null;
+    this.targetPreview = null;
+    this.sourceFile = null;
+    this.targetFile = null;
+    this.currentRekognitionResult = null;
+    this.debugVariables = [];
+    this.isSuccessfulResult = false;
+    this.isBatchResult = false;
+    this.hasMatch = false;
+    this.pipelineSteps.forEach(s => {
+      s.state = 'pending';
+      s.detail = '';
+    });
+  }
+
+  // Trigger re-compile
   ngOnDestroy() {
     this.stopPolling();
+    this.blobUrls.forEach(url => URL.revokeObjectURL(url));
+    this.blobUrls = [];
   }
 
   onDragOver(event: DragEvent, type: 'source' | 'target') {
@@ -426,27 +453,47 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
   private async loadHistory() {
     const currentAppName = this.appName;
     if (!currentAppName) return;
-
     this.isLoadingHistory = true;
     try {
-      const processReq = new ProcessQueryCloudRequestModel({
-        appName: currentAppName,
-        processDefinitionKey: this.processDefinitionKey,
-        sorting: [{ orderBy: 'startDate', direction: 'DESC' }] as any,
-        skipCount: 0,
-        maxItems: 5
+      const token = this.authService.getToken();
+      const deployedApps = this.appConfigService.get<any[]>('alfresco-deployed-apps') || [];
+      const currentAppName = deployedApps[0]?.name || 'ha-sim-eebb90f3';
+      
+      // Use the provided Hyland CIC host URLs
+      const bpmHost = "https://f2d33dbe-a43f-4974-9b15-f6861620cb7f.studio.experience.hyland.com";
+      
+      const queryUrl = `${bpmHost}/${currentAppName}/query/v1/process-instances?sort=startDate,desc&size=20`;
+      const processRes = await fetch(queryUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      let instances: any[] = [];
+      if (processRes.ok) {
+        const processJson = await processRes.json();
+        
+        let allInstances = [];
+        if (processJson?.list?.entries) {
+          allInstances = processJson.list.entries.map((e: any) => e.entry);
+        } else if (processJson?._embedded?.processInstances) {
+          allInstances = processJson._embedded.processInstances;
+        }
 
-      const res = await firstValueFrom(this.processListCloudService.getProcessByRequest(processReq as any));
-      const instances = res?.list?.entries?.map((e: any) => e.entry) || [];
+        instances = allInstances
+          .filter((inst: any) => 
+            inst.processDefinitionKey === this.processDefinitionKey || 
+            inst.processDefinitionId?.startsWith(this.processDefinitionKey) ||
+            inst.name?.startsWith('Visual Inspector Comparison')
+          )
+          .map((inst: any) => ({ ...inst, isExpanded: false })) // Default to collapsed
+          .slice(0, 5);
+      } else {
+        console.warn('[Visual Inspector] History query API failed:', processRes.status);
+      }
       
       // Fetch variables for each instance
-      const queryHost = window.location.origin;
-      const token = this.authService.getToken();
-
       for (const inst of instances) {
         try {
-          const varRes = await fetch(`${queryHost}/${currentAppName}/query/v1/process-instances/${inst.id}/variables?size=100`, {
+          const varRes = await fetch(`${bpmHost}/${currentAppName}/query/v1/process-instances/${inst.id}/variables?size=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -456,11 +503,69 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
             
             // Extract images from 'contents' variable
             const contentsVar = inst.variables.find((v: any) => v.name === 'contents');
-            if (contentsVar && Array.isArray(contentsVar.value)) {
-              inst.images = contentsVar.value.map((doc: any) => {
-                const sysId = doc.sys_id || doc.id;
-                return `${queryHost}/api/documents/id/${sysId}/content`;
-              });
+            let docs = [];
+            if (contentsVar) {
+              if (Array.isArray(contentsVar.value)) {
+                docs = contentsVar.value;
+              } else if (typeof contentsVar.value === 'string' && contentsVar.value.startsWith('[')) {
+                try {
+                  docs = JSON.parse(contentsVar.value);
+                } catch (e) {
+                  console.warn('[Visual Inspector] Failed to parse contents variable', e);
+                }
+              }
+            }
+
+            if (docs.length > 0) {
+              const imageUrls = [];
+              for (const doc of docs) {
+                try {
+                  const sysId = (typeof doc === 'object') ? (doc.sys_id || doc.id) : doc;
+                  if (!sysId) continue;
+                  
+                  // Strategy 1: Try to get a signed URL from HXP (Best for CORS/Security)
+                  // We use the proxy path '/api' to avoid CORS on the initial request
+                  const signedUrlEndpoint = `/api/download/url/${sysId}/sysfile_blob?expiration=3600`;
+                  const signedRes = await fetch(signedUrlEndpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (signedRes.ok) {
+                    const signedText = await signedRes.text();
+                    let finalUrl = signedText;
+                    try {
+                      // If it's actually JSON, parse it (standard for some environments)
+                      const signedJson = JSON.parse(signedText);
+                      if (signedJson?.data) finalUrl = signedJson.data;
+                    } catch (e) {
+                      // If parsing fails, we assume signedText is the raw URL string (common for direct CIC calls)
+                    }
+                    
+                    if (finalUrl && finalUrl.startsWith('http')) {
+                      imageUrls.push(this.sanitizer.bypassSecurityTrustStyle(`url('${finalUrl}')`));
+                      continue;
+                    }
+                  }
+
+                  // Strategy 2: Fallback to Blob via Proxy
+                  const contentUrl = `/api/download/${sysId}/sysfile_blob`;
+                  const blobRes = await fetch(contentUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (blobRes.ok) {
+                    const blob = await blobRes.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    this.blobUrls.push(blobUrl); // Track for cleanup
+                    imageUrls.push(this.sanitizer.bypassSecurityTrustStyle(`url('${blobUrl}')`));
+                  } else {
+                    console.warn(`[Visual Inspector] All image fetch strategies failed for ${sysId}`);
+                  }
+                } catch (imgErr) {
+                  console.warn('[Visual Inspector] Error in image fetch pipeline', imgErr);
+                }
+              }
+              inst.images = imageUrls;
             }
 
             // Look for Rekognition/result JSON using flexible matching
@@ -480,19 +585,11 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
 
       this.historicalInstances = instances;
 
-      // If we don't have a live process running, but we have history, show the most recent result in the scorecard
-      if (!this.processInstanceId && this.historicalInstances.length > 0) {
-        const mostRecent = this.historicalInstances.find((i: any) => i.rekognitionData != null);
-        if (mostRecent) {
-          this.currentRekognitionResult = mostRecent.rekognitionData;
-          this.cdr.detectChanges();
-        }
-      }
-
     } catch (err) {
       console.error('[Visual Inspector] Error loading history:', err);
     } finally {
       this.isLoadingHistory = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -634,6 +731,7 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
           this.zone.run(() => {
             this.foundVariableName = found.key;
             this.currentRekognitionResult = parsed;
+            this.updateResultStates(parsed);
             this.cdr.detectChanges();
           });
           return;
@@ -714,6 +812,7 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
         
         this.zone.run(() => {
           this.currentRekognitionResult = rekData;
+          this.updateResultStates(rekData);
           this.cdr.detectChanges();
           this.loadHistory();
         });
@@ -732,8 +831,22 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
     }, 1500);
   }
 
+  getSafeStyle(url: string | any) {
+    if (!url) return 'none';
+    if (typeof url !== 'string') return url; // Already sanitized
+    return this.sanitizer.bypassSecurityTrustStyle(`url('${url}')`);
+  }
+
+  getSafeUrl(url: string) {
+    if (!url) return '';
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
   // --- UI Helpers ---
 
+  toggleExpand(run: any) {
+    run.isExpanded = !run.isExpanded;
+  }
   private updatePipeline(id: string, state: string, detail?: string) {
     const step = this.pipelineSteps.find(s => s.id === id);
     if (step) {
@@ -744,27 +857,42 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
 
   // --- Result Extractors ---
   
-  get isSuccessfulResult(): boolean {
-    const data = this.currentRekognitionResult;
-    if (!data) return false;
-    if (data._type === 'batch') return true;
-    return !!(data.body || data.statusCode == 200);
-  }
+  private updateResultStates(data: any) {
+    if (!data) {
+      this.isSuccessfulResult = false;
+      this.isBatchResult = false;
+      this.hasMatch = false;
+      return;
+    }
 
-  get isBatchResult(): boolean {
-    return this.currentRekognitionResult?._type === 'batch';
-  }
-
-  get hasMatch(): boolean {
+    this.isBatchResult = data._type === 'batch';
+    // Be very lenient: if we have a body, any sign of FaceMatches, or a 200 status, it's a success.
+    this.isSuccessfulResult = this.isBatchResult || !!(
+      data.body || 
+      data.FaceMatches || 
+      data.Face || 
+      data.Similarity || 
+      data.statusCode == 200 || 
+      data.statusCode == '200'
+    );
+    
+    console.log('[Visual Inspector] updateResultStates:', { 
+      isBatch: this.isBatchResult, 
+      isSuccess: this.isSuccessfulResult, 
+      hasBody: !!data.body,
+      statusCode: data.statusCode 
+    });
+    
     if (this.isBatchResult) {
-      const items = this.currentRekognitionResult.items || [];
-      return items.some((item: any) => 
+      const items = data.items || [];
+      this.hasMatch = items.some((item: any) => 
         item.flagged === true || item.matched === true || item.match === true ||
         (item.similarity && item.similarity >= 80) ||
         (item.confidence && item.confidence >= 80)
       );
+    } else {
+      this.hasMatch = this.getSimilarity() >= 80;
     }
-    return this.getSimilarity() >= 80;
   }
 
   getSimilarity(): number {
@@ -956,5 +1084,50 @@ export class FaceMelterComponent implements OnDestroy, AfterViewChecked {
 
   isSimpleValue(val: any): boolean {
     return val === null || val === undefined || typeof val !== 'object';
+  }
+
+  // --- Data Explorer Helpers ---
+
+  getFilteredVariables(): any[] {
+    if (!this.debugVariables) return [];
+    if (!this.varSearchQuery) return this.debugVariables;
+    const q = this.varSearchQuery.toLowerCase();
+    return this.debugVariables.filter((v: any) =>
+      v.name?.toLowerCase().includes(q) ||
+      (typeof v.value === 'string' && v.value.toLowerCase().includes(q))
+    );
+  }
+
+  toggleVarExpand(name: string) {
+    this.expandedVars[name] = !this.expandedVars[name];
+  }
+
+  getVarTypeClass(val: any): string {
+    if (val === null || val === undefined) return 'null';
+    if (Array.isArray(val)) return 'array';
+    return typeof val; // 'string' | 'number' | 'boolean' | 'object'
+  }
+
+  getVarTypeLabel(val: any): string {
+    if (val === null || val === undefined) return 'null';
+    if (Array.isArray(val)) return `array[${val.length}]`;
+    if (typeof val === 'object') {
+      const keys = Object.keys(val);
+      return `object{${keys.length}}`;
+    }
+    return typeof val;
+  }
+
+  copyVarValue(v: any) {
+    const text = typeof v.value === 'object' ? JSON.stringify(v.value, null, 2) : String(v.value ?? '');
+    navigator.clipboard.writeText(text).then(() => {
+      v._copied = true;
+      setTimeout(() => { v._copied = false; this.cdr.detectChanges(); }, 1500);
+      this.cdr.detectChanges();
+    });
+  }
+
+  trackByVarName(_index: number, v: any): string {
+    return v.name;
   }
 }

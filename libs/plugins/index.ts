@@ -10,19 +10,20 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterModule } from '@angular/router';
 import { ExtensionService } from '@alfresco/adf-extensions';
-import { FaceMelterComponent } from './face-melter/face-melter.component';
-import { FaceMelterSidenavComponent } from './face-melter/face-melter-sidenav.component';
+import { FaceCompareComponent } from './face-compare/face-compare.component';
+import { FaceCompareSidenavComponent } from './face-compare/face-compare-sidenav.component';
+import { FormsModule } from '@angular/forms';
 
 @NgModule({
-    declarations: [FaceMelterComponent, FaceMelterSidenavComponent],
-    imports: [CommonModule, MatIconModule, RouterModule],
-    exports: [FaceMelterComponent, FaceMelterSidenavComponent]
+    declarations: [FaceCompareComponent, FaceCompareSidenavComponent],
+    imports: [CommonModule, MatIconModule, RouterModule, FormsModule],
+    exports: [FaceCompareComponent, FaceCompareSidenavComponent]
 })
 export class PluginsModule {
     constructor(private extensions: ExtensionService) {
         this.extensions.setComponents({
-            'face.melter': FaceMelterComponent,
-            'face.melter.sidenav': FaceMelterSidenavComponent
+            'face.compare': FaceCompareComponent,
+            'face.compare.sidenav': FaceCompareSidenavComponent
         });
     }
 }

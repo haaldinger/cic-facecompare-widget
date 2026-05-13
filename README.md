@@ -1,10 +1,10 @@
-# CIC_FaceMelter
+# CIC Face Compare Widget
 
 ## Introduction
 
-CIC_FaceMelter is an Angular-based plugin for the Hyland Automate Platform, replacing the legacy Face Melter Flask application. It provides an interactive visual inspector and face comparison tools using AWS Rekognition.
+An Angular-based plugin for the Hyland Automate Platform, providing an interactive visual inspector and face comparison tools using AWS Rekognition. This widget enables secure image verification and process-driven identity checks within the Hyland ecosystem.
 
-This repository is a monorepo hosting the Face Melter application and its libraries, built on top of [Alfresco Application Development Framework (ADF)](https://github.com/Alfresco/alfresco-ng2-components) components.
+This repository is a monorepo hosting the Face Compare application and its libraries, built on top of [Alfresco Application Development Framework (ADF)](https://github.com/Alfresco/alfresco-ng2-components) components.
 
 ## Installing dependencies
 

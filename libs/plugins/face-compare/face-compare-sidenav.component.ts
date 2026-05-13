@@ -1,12 +1,12 @@
 import { Component } from '@angular/core';
 
 @Component({
-    selector: 'app-face-melter-sidenav',
+    selector: 'app-face-compare-sidenav',
     standalone: false,
     template: `
         <div class="sidenav-section">
             <div class="sidenav-section-header">Visual Inspector</div>
-            <a class="sidenav-item" routerLink="/face-melter" routerLinkActive="active">
+            <a class="sidenav-item" routerLink="/face-compare" routerLinkActive="active">
                 <mat-icon>compare</mat-icon>
                 <span class="sidenav-item-label">Compare Images</span>
             </a>
@@ -58,4 +58,4 @@ import { Component } from '@angular/core';
         }
     `]
 })
-export class FaceMelterSidenavComponent {}
+export class FaceCompareSidenavComponent {}
