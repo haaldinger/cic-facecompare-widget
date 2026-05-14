@@ -401,12 +401,14 @@
           <!-- Image Previews -->
           <div class="run-images" *ngIf="run.images?.length > 0">
             <div class="preview-box">
-              <div class="preview-img" [style.backgroundImage]="getSafeStyle(run.images[0])"></div>
+              <img class="preview-img" [src]="getSafeUrl(run.images[0])" *ngIf="run.images[0]" />
+              <div class="preview-img" *ngIf="!run.images[0]"></div>
               <span class="preview-label">Source</span>
             </div>
             <div class="preview-vs">VS</div>
             <div class="preview-box">
-              <div class="preview-img" [style.backgroundImage]="getSafeStyle(run.images[1])"></div>
+              <img class="preview-img" [src]="getSafeUrl(run.images[1])" *ngIf="run.images[1]" />
+              <div class="preview-img" *ngIf="!run.images[1]"></div>
               <span class="preview-label">Target</span>
             </div>
           </div>

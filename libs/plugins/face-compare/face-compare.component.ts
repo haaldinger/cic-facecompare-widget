@@ -218,8 +218,13 @@ export class FaceCompareComponent implements OnDestroy, AfterViewChecked {
       // 2. Create Document Nodes in Timestamp Folder
       this.updatePipeline('create', 'active');
       this.logActivity('info', `Building document nodes in repository`);
-      const sourceDoc = await this.createDocumentNode(sourceUpload, this.sourceFile, subFolder);
-      const targetDoc = await this.createDocumentNode(targetUpload, this.targetFile, subFolder);
+      let sourceDoc = await this.createDocumentNode(sourceUpload, this.sourceFile, subFolder);
+      let targetDoc = await this.createDocumentNode(targetUpload, this.targetFile, subFolder);
+      
+      // Map sys_id to id for the Automate Lambda backend
+      sourceDoc = { ...sourceDoc, id: sourceDoc.sys_id || sourceDoc.id };
+      targetDoc = { ...targetDoc, id: targetDoc.sys_id || targetDoc.id };
+
       this.updatePipeline('create', 'completed', `Created 2 nodes`);
       this.logActivity('success', `Repository nodes synced successfully`);
 
@@ -542,7 +547,7 @@ export class FaceCompareComponent implements OnDestroy, AfterViewChecked {
                     }
                     
                     if (finalUrl && finalUrl.startsWith('http')) {
-                      imageUrls.push(this.sanitizer.bypassSecurityTrustStyle(`url('${finalUrl}')`));
+                      imageUrls.push(finalUrl);
                       continue;
                     }
                   }
@@ -557,7 +562,7 @@ export class FaceCompareComponent implements OnDestroy, AfterViewChecked {
                     const blob = await blobRes.blob();
                     const blobUrl = URL.createObjectURL(blob);
                     this.blobUrls.push(blobUrl); // Track for cleanup
-                    imageUrls.push(this.sanitizer.bypassSecurityTrustStyle(`url('${blobUrl}')`));
+                    imageUrls.push(blobUrl);
                   } else {
                     console.warn(`[Visual Inspector] All image fetch strategies failed for ${sysId}`);
                   }
